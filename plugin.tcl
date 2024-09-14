@@ -58,7 +58,12 @@ namespace eval ::plugins::${plugin_name} {
 
 	proc ::wibble::return_200_json {content} {
 		dict set response status 200
-		dict set response header content-type {} application/json
+		dict set headers "Access-Control-Allow-Origin" "*"
+		dict set headers "Access-Control-Allow-Credentials" "false"
+    dict set headers "Access-Control-Allow-Methods" "GET, POST, OPTIONS"
+    dict set headers "Access-Control-Allow-Headers" "Content-Type"
+		dict set headers content-type {} application/json
+		dict set response header $headers
 		dict set response content "$content\n"
 		sendresponse $response
 	}
@@ -113,12 +118,44 @@ namespace eval ::plugins::${plugin_name} {
 		   if { ![check_auth $state] } {
 			return;
 		}
+		set path [dict get $state request path]
+		msg [namespace current] "path: $path"
 		set fp [open "[homedir]/[plugin_directory]/advanced_rest_api/index.html" r]
 		set file_data [read $fp]
 		close $fp
 
 	  dict set state response status 200
 		dict set state response header content-type "" text/html
+		dict set state response content $file_data
+		sendresponse [dict get $state response]
+	}
+
+	# WebUI endpoint
+	proc ::wibble::webui {state} {
+		set path [dict get $state request path]
+		msg [namespace current] "path: $path"
+		if { ![check_auth $state] } {
+			return;
+		}
+		set fp [open "[homedir]/[plugin_directory]/advanced_rest_api/webui/build/index.html" r]
+		set file_data [read $fp]
+		close $fp
+		dict set state response status 200
+		dict set state response header content-type "" text/html
+		dict set state response content $file_data
+		sendresponse [dict get $state response]
+	}
+
+	proc ::wibble::svelte {state} {
+		if { ![check_auth $state] } {
+			return;
+		}
+		set request_path [dict get $state request path]
+		set fp [open "[homedir]/[plugin_directory]/advanced_rest_api/webui/build/$request_path" r]
+		set file_data [read $fp]
+		close $fp
+		dict set state response status 200
+		dict set state response header content-type "" application/javascript
 		dict set state response content $file_data
 		sendresponse [dict get $state response]
 	}
@@ -452,6 +489,8 @@ namespace eval ::plugins::${plugin_name} {
 		::wibble::handle /api/help docs
     ::wibble::handle /api/v2/shot history_v2
     ::wibble::handle /api/v2/shots history_sdb
+		::wibble::handle /webui webui
+		::wibble::handle /_app svelte
 		::wibble::handle / indexpage
         # Start a server and enter the event loop if not already there.
 
