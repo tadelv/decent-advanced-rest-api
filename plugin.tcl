@@ -330,7 +330,7 @@ namespace eval ::plugins::${plugin_name} {
 		::plugins::SDB::update_shot_description $updatedShot(clock) notes
 
     append shotName [lindex [split $shot "."] 0] ".shot"
-		::shot::convert_legacy_to_v2 $shotName
+		::shot::convert_legacy_to_v2 $shotName {} {} 0
 
 		unset shotName
     append shotName [lindex [split $shot "."] 0] ".json"

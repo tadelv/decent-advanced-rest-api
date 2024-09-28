@@ -237,11 +237,14 @@
               var profile = t.profile.title;
               var duration = time[time.length];
               var ratio = Math.round(t.meta.out / t.meta.in * 100) / 100;
+							var profileNotes = t.meta.shot.notes || describedShot.espresso_notes;
               var profileMessage =
               `dose in: ${t.meta.in}, out: ${t.meta.out} (1:${ratio}), target: ${describedShot.target_drink_weight}g, in ${t.meta.time}s\n` +
               `beans: ${describedShot.bean_brand} ${describedShot.bean_type}\n` +
               `grinder: ${describedShot.grinder_model} @ ${describedShot.grinder_setting}\n` +
-              `score: ${describedShot.espresso_enjoyment}, notes: ${describedShot.espresso_notes}`
+              `score: ${describedShot.espresso_enjoyment}, notes: ${profileNotes}`;
+
+							document.getElementById('shot-notes').value = profileNotes;
 
               document.getElementById('shot-details-title').innerText = profile;
               document.getElementById('shot-details-content').innerText = profileMessage
@@ -296,6 +299,25 @@
       })
       .catch(error => alert(error.message));
     }
+
+		function updateShotNotes() {
+			let selected = document.getElementById("shots").value;
+			let newNotes = document.getElementById("shot-notes").value;
+			if (!selected || !newNotes) {
+				return;
+			}
+
+		fetch(address + "/api/v2/shot/update/" + selected, { method: 'POST', body: `{"espresso_notes": "${newNotes}" }`}).then(response => {
+			if (response.status == 200) {
+			document.getElementById("modal-content").innerText = "Shot update successful"
+			loadSelectedShot_v2();
+			}
+			else {
+			document.getElementById("modal-content").innerText = `Shot update error: ${response.statusText}`
+			}
+			document.getElementById("modal-control").checked = true;
+		})
+		}
 
     function loadSelectedProfile () {
       let selected = document.getElementById("profiles").value;
@@ -515,7 +537,12 @@
       <button onclick="setAsNextShot()">Set as next in DYE</button>
       <!-- <span class="icon-search"></span> -->
       <br />
-      <div style="max-width: 100%;">
+      <form id="myForm">
+        <label for="textInput">Input:</label>
+        <textarea id="shot-notes" name="textInput" rows="3"></textarea>
+        <button type="button" onclick="updateShotNotes()">Done</button>
+    </form>
+		<div style="max-width: 100%;">
         <h2 id="shot-details-title"></h2>
         <p id="shot-details-content"></p>
         <canvas id="myChart"></canvas>
