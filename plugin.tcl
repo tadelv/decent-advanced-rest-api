@@ -18,6 +18,12 @@ namespace eval ::plugins::${plugin_name} {
     proc main {} {
         package require wibble
 
+				if { ![plugins available SDB] || ![plugins available DYE] } {
+					popup "SDB or DYE plugin not available"
+					die "SDB or DYE plugin not available"
+				}
+				plugins preload SDB
+				plugins preload DYE
         # Create settings if non-existant
         if {[array size ::plugins::advanced_rest_api::settings] == 0} {
             array set ::plugins::advanced_rest_api::settings {
