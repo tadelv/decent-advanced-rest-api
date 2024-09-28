@@ -530,6 +530,7 @@ namespace eval ::plugins::${plugin_name} {
 			set steps_list [list]
 			foreach step [dict get $json_parsed steps] {
 					set step_dict [dict create]
+					dict set step_dict exit_if 0
 					foreach {key value} $step {
 							if { $key eq "limiter" } {
 									# Handle the limiter sub-dictionary
