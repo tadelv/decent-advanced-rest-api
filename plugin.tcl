@@ -54,6 +54,13 @@ namespace eval ::plugins::${plugin_name} {
 		return false;
 	}
 
+	proc ::wibble::bad_request {state} {
+		dict set response status 400
+		dict set state response header content-type "" {application/json charset utf-8}
+		dict set response content "{status: \"bad request\"}"
+		sendresponse $response
+		return false;
+	}
 	# Utilities
 
 	proc ::wibble::return_200_json {content} {
@@ -222,6 +229,9 @@ namespace eval ::plugins::${plugin_name} {
     if { $method eq "PUT" } {
       return [set_next_shot_in_dye $state]
     }
+		if { $method eq "POST" } {
+			return;
+		}
 		set path [dict get $state request path]
 		set shot [lindex [split $path "/"] 4]
     append shotName [lindex [split $shot "."] 0] ".json"
@@ -295,6 +305,40 @@ namespace eval ::plugins::${plugin_name} {
     }
     ::wibble::return_200_json [::wibble::compile_json {list dict} $jsonArray]
   }
+
+	proc ::wibble::update_shot_notes {state} {
+    set method [dict get $state request method]
+		if { ![check_auth $state] || $method ne "POST" } {
+			return;
+		}
+		if { [dict get $state request rawpost] == "" } {
+			::wibble::bad_request $state
+		  return 
+	  }
+		set postdata [::json::json2dict [dict get $state request rawpost]]
+		set path [dict get $state request path]
+		set shot [lindex [split $path "/"] 5]
+		if {[dict get $postdata espresso_notes] == ""} {
+      ::wibble::return_200_json ""
+			return 
+		}
+
+		array set notes [ list espresso_notes [dict get $postdata espresso_notes] ]
+		::plugins::SDB::modify_shot_file $shot notes
+		array set updatedShot [::plugins::SDB::load_shot $shot]
+
+		::plugins::SDB::update_shot_description $updatedShot(clock) notes
+
+    append shotName [lindex [split $shot "."] 0] ".shot"
+		::shot::convert_legacy_to_v2 $shotName
+
+		unset shotName
+    append shotName [lindex [split $shot "."] 0] ".json"
+		set fd [open "[pwd]/history_v2/$shotName" r]
+		fconfigure $fd -translation binary
+		set content [read $fd]; close $fd
+		::wibble::return_200_json $content
+	}
 
 	# based on https://github.com/Testsubject1683/de1-mirror/tree/webapi
 	proc ::wibble::status {} {
@@ -455,6 +499,7 @@ namespace eval ::plugins::${plugin_name} {
         ::wibble::handle /api/profile profile
 		::wibble::handle /api/shot history
 		::wibble::handle /api/help docs
+		::wibble::handle /api/v2/shot/update update_shot_notes
     ::wibble::handle /api/v2/shot history_v2
     ::wibble::handle /api/v2/shots history_sdb
 		::wibble::handle / indexpage
