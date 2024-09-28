@@ -152,15 +152,28 @@ namespace eval ::plugins::${plugin_name} {
       set rawheaders [dict get $state request rawheader]
       set filenameIndex [lsearch $rawheaders "filename:*"]
       if {$filenameIndex == -1 } {
-        set localfilename "[clock seconds].tcl"  
+        set profilePath "[clock seconds].tcl"  
       } else {
-        set localfilename  [lindex [split [lindex $rawheaders $filenameIndex] ": "] end]
+        set localfilename [lindex [split [lindex $rawheaders $filenameIndex] ": "] end]
+				append profilePath [lindex [split $localfilename "."] 0] ".tcl"
       }
 			set postdata [dict get $state request rawpost]
-			set path "[pwd]/profiles/$localfilename"
+			variable profileData
+			set profileData [::profile::v2_to_legacy $postdata]
+			#if {[catch {
+			#	set profileData [::profile::v2_to_legacy $postdata]
+			#	set callImport 1
+			#}]} {
+			#	set profileData $postdata
+			#}
+			set path "[pwd]/profiles/$profilePath"
 			set fileId [open $path "w"]
-			puts -nonewline $fileId $postdata
+			puts -nonewline $fileId $profileData
 			close $fileId
+			#if {[info exists callImport]} {
+			#	array set newProfile [::profile::read_legacy "profile_file" $path]
+			#	::profile::import_legacy $newProfile(profile)
+			#}
 			::wibble::return_200_json "$localfilename written"
 		}
 		if {$method eq "GET"} {
@@ -498,6 +511,60 @@ namespace eval ::plugins::${plugin_name} {
 	}
 
 
+
+	proc ::profile::v2_to_legacy {json_string} {
+			# Parse the JSON string into a TCL dictionary
+			set json_parsed [json::json2dict $json_string]
+			# Create an empty dictionary to store the TCL structure
+			set tcl_output [dict create]
+
+			# Add title and author to the dictionary
+			dict set tcl_output profile_title [dict get $json_parsed title]
+			dict set tcl_output author [dict get $json_parsed author]
+
+			# Add beverage_type and notes to the dictionary
+			dict set tcl_output beverage_type [dict get $json_parsed beverage_type]
+			dict set tcl_output profile_notes [dict get $json_parsed notes]
+
+			# Handle the steps section
+			set steps_list [list]
+			foreach step [dict get $json_parsed steps] {
+					set step_dict [dict create]
+					foreach {key value} $step {
+							if { $key eq "limiter" } {
+									# Handle the limiter sub-dictionary
+									set limiter [dict get $step limiter]
+									#dict set step_dict limiter [list value [dict get $limiter value] range [dict get $limiter range]]
+								  dict set step_dict max_flow_or_pressure_range [dict get $limiter range]
+									dict set step_dict max_flow_or_pressure [dict get $limiter value]
+							} elseif { $key eq "exit" } {
+								  dict set step_dict exit_if 1
+									set exit_dict [dict get $step "exit"]
+									dict set step_dict "exit_[dict get $exit_dict type]_[dict get $exit_dict condition]" [dict get $exit_dict value]
+									dict set step_dict exit_type "[dict get $exit_dict type]_[dict get $exit_dict condition]"
+							} else {
+									dict set step_dict $key $value
+							}
+					}
+					lappend steps_list $step_dict
+			}
+			dict set tcl_output advanced_shot $steps_list
+
+			# Add remaining fields to the dictionary
+			dict set tcl_output tank_temperature [dict get $json_parsed tank_temperature]
+			dict set tcl_output final_desired_shot_weight_advanced [dict get $json_parsed target_weight]
+			dict set tcl_output final_desired_shot_volume_advanced [dict get $json_parsed target_volume]
+			dict set tcl_output final_desired_shot_volume_advanced_count_start [dict get $json_parsed target_volume_count_start]
+			dict set tcl_output settings_profile_type [dict get $json_parsed legacy_profile_type]
+			dict set tcl_output type [dict get $json_parsed type]
+			dict set tcl_output lang [dict get $json_parsed lang]
+			dict set tcl_output profile_hide [dict get $json_parsed hidden]
+			#dict set tcl_output reference_file [dict get $json_parsed reference_file]
+			#dict set tcl_output version [dict get $json_parsed version]
+
+			# Return the resulting TCL dictionary
+			return $tcl_output
+	}
 	# Define handlers
 
 		::wibble::handle /api/status state
