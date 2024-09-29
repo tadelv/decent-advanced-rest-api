@@ -17,6 +17,7 @@ namespace eval ::plugins::${plugin_name} {
 	# based on Johanna Schander's Web API
     proc main {} {
         package require wibble
+				package require huddle
 
 				if { ![plugins available SDB] || ![plugins available DYE] } {
 					popup "SDB or DYE plugin not available"
@@ -202,8 +203,9 @@ namespace eval ::plugins::${plugin_name} {
 				set fd [open "[pwd]/profiles/$profile" r]
 				fconfigure $fd -translation binary
 				set content [read $fd]; close $fd
+				set huddle_profile [::profile::legacy_profile_to_v2 $content]
 				# ::wibble::return_200_json   [::wibble::compile_json {dict} $content]
-				::wibble::return_200_json $content
+				::wibble::return_200_json [huddle jsondump $huddle_profile]
 			} else {
 				#If a profile is specified but does not exist, return all profiles
 				::wibble::return_200_json [::wibble::compile_json {list} $savedprofiles]

@@ -342,8 +342,9 @@
           .then(t => {
 
             var element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(t));
-            element.setAttribute('download', selected);
+            element.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(t));
+            element.setAttribute('download', selected.replace('.tcl', '.json'));
+            						
 
             element.style.display = 'none';
             document.body.appendChild(element);
