@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espresso Profile Editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .step { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; position: relative; }
+        label { display: inline-block; width: 150px; }
+        input[type="number"] { width: 60px; }
+        .exit-condition, .limiter { margin-left: 20px; }
+        .remove-step { position: absolute; top: 10px; right: 10px; }
+        #addStep { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Espresso Profile Editor</h1>
+    
+    <input type="file" id="fileInput" accept=".json">
+    <button onclick="downloadProfile()">Download Profile</button>
+    
+    <h2>Global Settings</h2>
+    <div id="globalSettings"></div>
+    
+    <h2>Steps</h2>
+    <div id="steps"></div>
+    <button id="addStep" onclick="addStep()">Add Step</button>
+    
+    <h2>Profile Graph</h2>
+    <canvas id="profileChart"></canvas>
+
+    <script>
+        let profile = null;
+        const fileInput = document.getElementById('fileInput');
+        const globalSettings = document.getElementById('globalSettings');
+        const stepsContainer = document.getElementById('steps');
+        const ctx = document.getElementById('profileChart').getContext('2d');
+        let chart;
+
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                profile = JSON.parse(e.target.result);
+                renderProfile();
+                updateChart();
+            };
+            reader.readAsText(file);
+        });
+
+        function renderProfile() {
+            renderGlobalSettings();
+            renderSteps();
+        }
+
+        function renderGlobalSettings() {
+            globalSettings.innerHTML = `
+                <label>Title:</label> <input type="text" value="${profile.title}" onchange="updateProfile('title', this.value)"><br>
+                <label>Author:</label> <input type="text" value="${profile.author}" onchange="updateProfile('author', this.value)"><br>
+								<label>Notes:</label> <textarea onchange="updateProfile('notes', this.value)">${profile.notes}</textarea><br>
+                <label>Target Weight:</label> <input type="number" value="${profile.target_weight}" onchange="updateProfile('target_weight', this.value)"><br>
+								<label>Target Volume:</label> <input type="number" value="${profile.target_volume}" onchange="updateProfile('target_volume', this.value)"><br>
+                <label>Tank Temp:</label> <input type="number" value="${profile.tank_temperature}" onchange="updateProfile('tank_temperature', this.value)">
+            `;
+        }
+
+        function renderSteps() {
+            stepsContainer.innerHTML = '';
+            profile.steps.forEach((step, index) => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'step';
+                stepDiv.innerHTML = `
+                    <h3>Step ${index + 1}: ${step.name}</h3>
+                    ${profile.steps.length > 1 ? `<button class="remove-step" onclick="removeStep(${index})">Remove Step</button>` : ''}
+                    <label>Name:</label> <input type="text" value="${step.name}" onchange="updateStep(${index}, 'name', this.value)"><br>
+                    <label>Pump:</label> <select onchange="updateStep(${index}, 'pump', this.value)">
+                        <option value="flow" ${step.pump === 'flow' ? 'selected' : ''}>Flow</option>
+                        <option value="pressure" ${step.pump === 'pressure' ? 'selected' : ''}>Pressure</option>
+                    </select><br>
+                    <label>Flow:</label> <input type="number" step="0.1" value="${step.flow}" onchange="updateStep(${index}, 'flow', this.value)"><br>
+                    <label>Pressure:</label> <input type="number" step="0.1" value="${step.pressure}" onchange="updateStep(${index}, 'pressure', this.value)"><br>
+                    <label>Temperature:</label> <input type="number" step="0.1" value="${step.temperature}" onchange="updateStep(${index}, 'temperature', this.value)"><br>
+                    <label>Sensor:</label> <select onchange="updateStep(${index}, 'sensor', this.value)">
+                        <option value="coffee" ${step.sensor === 'coffee' ? 'selected' : ''}>Coffee</option>
+                        <option value="water" ${step.sensor === 'water' ? 'selected' : ''}>Water</option>
+                    </select><br>
+                    <label>Transition:</label> <select onchange="updateStep(${index}, 'transition', this.value)">
+                        <option value="fast" ${step.transition === 'fast' ? 'selected' : ''}>Fast</option>
+                        <option value="smooth" ${step.transition === 'smooth' ? 'selected' : ''}>Smooth</option>
+                    </select><br>
+										<label>Duration:</label> <input type="number" step="0.1" value="${step.seconds || ''}" onchange="updateStep(${index}, 'seconds', this.value)"><br>
+										<label>Volume:</label> <input type="number" step="0.1" value="${step.volume || ''}" onchange="updateStep(${index}, 'volume', this.value)"><br>
+										<label>Weight:</label> <input type="number" step="0.1" value="${step.weight || ''}" onchange="updateStep(${index}, 'weight', this.value)"><br>
+                    <label>Exit Condition:</label> <input type="checkbox" ${step.exit ? 'checked' : ''} onchange="toggleExitCondition(${index}, this.checked)"><br>
+                    <div class="exit-condition" id="exitCondition${index}" style="display: ${step.exit ? 'block' : 'none'}">
+                        <label>Exit Type:</label> <select onchange="updateExitCondition(${index}, 'type', this.value)">
+                            <option value="pressure" ${step.exit?.type === 'pressure' ? 'selected' : ''}>Pressure</option>
+                            <option value="flow" ${step.exit?.type === 'flow' ? 'selected' : ''}>Flow</option>
+                        </select><br>
+                        <label>Exit Condition:</label> <select onchange="updateExitCondition(${index}, 'condition', this.value)">
+                            <option value="over" ${step.exit?.condition === 'over' ? 'selected' : ''}>Over</option>
+                            <option value="under" ${step.exit?.condition === 'under' ? 'selected' : ''}>Under</option>
+                        </select><br>
+                        <label>Exit Value:</label> <input type="number" step="0.1" value="${step.exit?.value || ''}" onchange="updateExitCondition(${index}, 'value', this.value)">
+                    </div>
+                    <label>Limiter:</label> <input type="checkbox" ${step.limiter ? 'checked' : ''} onchange="toggleLimiter(${index}, this.checked)"><br>
+                    <div class="limiter" id="limiter${index}" style="display: ${step.limiter ? 'block' : 'none'}">
+                        <label>Limiter Value:</label> <input type="number" step="0.1" value="${step.limiter?.value || ''}" onchange="updateLimiter(${index}, 'value', this.value)"><br>
+                        <label>Limiter Range:</label> <input type="number" step="0.1" value="${step.limiter?.range || ''}" onchange="updateLimiter(${index}, 'range', this.value)">
+                    </div>
+                `;
+                stepsContainer.appendChild(stepDiv);
+            });
+        }
+
+        function updateProfile(key, value) {
+            profile[key] = value;
+            updateChart();
+        }
+
+        function updateStep(index, key, value) {
+            profile.steps[index][key] = value;
+            updateChart();
+        }
+
+        function updateStepMoveOn(index, moveOnType) {
+            const step = profile.steps[index];
+            const currentValue = step.seconds || step.volume || step.weight || 0;
+            delete step.seconds;
+            delete step.volume;
+            delete step.weight;
+            step[moveOnType] = currentValue;
+            renderSteps();
+            updateChart();
+        }
+
+        function updateStepMoveOnValue(index, value) {
+            const step = profile.steps[index];
+            if (step.seconds !== undefined) step.seconds = value;
+            if (step.volume !== undefined) step.volume = value;
+            if (step.weight !== undefined) step.weight = value;
+            updateChart();
+        }
+
+        function toggleExitCondition(index, checked) {
+            if (checked) {
+                profile.steps[index].exit = { type: 'pressure', condition: 'over', value: 0 };
+            } else {
+                delete profile.steps[index].exit;
+            }
+            renderSteps();
+            updateChart();
+        }
+
+        function updateExitCondition(index, key, value) {
+            profile.steps[index].exit[key] = value;
+            updateChart();
+        }
+
+        function toggleLimiter(index, checked) {
+            if (checked) {
+                profile.steps[index].limiter = { value: 0, range: 0 };
+            } else {
+                delete profile.steps[index].limiter;
+            }
+            renderSteps();
+            updateChart();
+        }
+
+        function updateLimiter(index, key, value) {
+            profile.steps[index].limiter[key] = parseFloat(value);
+            updateChart();
+        }
+
+        function addStep() {
+            const newStep = {
+                name: `Step ${profile.steps.length + 1}`,
+                pump: 'flow',
+                flow: 0,
+                pressure: 0,
+                temperature: 90,
+                sensor: 'water',
+                transition: 'fast',
+                seconds: 30
+            };
+            profile.steps.push(newStep);
+            renderSteps();
+            updateChart();
+        }
+
+        function removeStep(index) {
+            if (profile.steps.length > 1) {
+                profile.steps.splice(index, 1);
+                renderSteps();
+                updateChart();
+            } else {
+                alert("Cannot remove the last step. There must be at least one step in the profile.");
+            }
+        }
+
+        function updateChart() {
+            const labels = profile.steps.map(step => step.name);
+            const pressureData = profile.steps.map(step => step.pressure);
+            const flowData = profile.steps.map(step => step.flow);
+            const temperatureData = profile.steps.map(step => step.temperature);
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Pressure (bar)',
+                            data: pressureData,
+                            borderColor: 'green',
+                            yAxisID: 'y-pressure',
+                        },
+                        {
+                            label: 'Flow (mL/s)',
+                            data: flowData,
+                            borderColor: 'blue',
+                            yAxisID: 'y-flow',
+                        },
+                        {
+                            label: 'Temperature (°C)',
+                            data: temperatureData,
+                            borderColor: 'red',
+                            yAxisID: 'y-temperature',
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        'y-pressure': {
+                            type: 'linear',
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Pressure (bar)'
+                            }
+                        },
+                        'y-flow': {
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Flow (mL/s)'
+                            }
+                        },
+                        'y-temperature': {
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function downloadProfile() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(profile, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+						downloadAnchorNode.setAttribute("download", `${profile.title}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+    </script>
+</body>
+</html>

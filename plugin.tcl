@@ -141,6 +141,20 @@ namespace eval ::plugins::${plugin_name} {
 		sendresponse [dict get $state response]
 	}
 
+	proc ::wibble::profile_editor {state} {
+		if { ![check_auth $state] } {
+			return;
+		}
+		set fp [open "[homedir]/[plugin_directory]/advanced_rest_api/profile.html" r]
+		set file_data [read $fp]
+		close $fp
+
+	  dict set state response status 200
+		dict set state response header content-type "" text/html
+		dict set state response content $file_data
+		sendresponse [dict get $state response]
+	}
+
 	# Profile endpoints
 
 	proc ::wibble::profile {state } {
@@ -576,6 +590,7 @@ namespace eval ::plugins::${plugin_name} {
 		::wibble::handle /api/v2/shot/update update_shot_notes
     ::wibble::handle /api/v2/shot history_v2
     ::wibble::handle /api/v2/shots history_sdb
+		::wibble::handle /profile profile_editor
 		::wibble::handle / indexpage
         # Start a server and enter the event loop if not already there.
 
