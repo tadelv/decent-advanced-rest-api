@@ -233,10 +233,67 @@
       }
 
       function updateChart() {
-        const labels = profile.steps.map((step) => step.name);
-        const pressureData = profile.steps.map((step) => step.pressure);
-        const flowData = profile.steps.map((step) => step.flow);
-        const temperatureData = profile.steps.map((step) => step.temperature);
+        const labels = [];
+        const pressureData = [];
+        const flowData = [];
+        const temperatureData = [];
+
+        const steps = profile.steps;
+
+        // Initialize previous values to 0 (for the first step)
+        let pressurePrev = 0;
+        let flowPrev = 0;
+        let temperaturePrev = 0;
+
+        for (let s = 0; s < steps.length; s++) {
+          const step = steps[s];
+          const times = parseInt(step.seconds) || 5;
+
+          // Generate labels for this step
+          for (let i = 1; i <= times; i++) {
+            labels.push(i);
+          }
+
+          const pressureCurr = parseFloat(step.pressure);
+          const flowCurr = parseFloat(step.flow);
+          const temperatureCurr = parseFloat(step.temperature);
+
+          if (step.transition === "smooth") {
+            // Interpolate from previous values to current values
+            for (let i = 0; i < times; i++) {
+              let t;
+              if (times > 1) {
+                t = i / (times - 1); // Normalized time between 0 and 1
+              } else {
+                t = 1; // If times is 1, we directly take the current value
+              }
+
+              // Linear interpolation formulas
+              const pressure = pressurePrev + t * (pressureCurr - pressurePrev);
+              const flow = flowPrev + t * (flowCurr - flowPrev);
+              const temperature =
+                temperaturePrev + t * (temperatureCurr - temperaturePrev);
+
+              pressureData.push(pressure);
+              flowData.push(flow);
+              temperatureData.push(temperature);
+            }
+          } else {
+            // For 'instant' transition, repeat the current values
+            for (let i = 0; i < times; i++) {
+              pressureData.push(pressureCurr);
+              flowData.push(flowCurr);
+              temperatureData.push(temperatureCurr);
+            }
+          }
+
+          // Update previous values to current values for the next iteration
+          pressurePrev = pressureCurr;
+          flowPrev = flowCurr;
+          temperaturePrev = temperatureCurr;
+        }
+
+        console.log(labels, pressureData, flowData, temperatureData);
 
         if (chart) {
           chart.destroy();
@@ -257,7 +314,7 @@
                 label: "Flow (mL/s)",
                 data: flowData,
                 borderColor: "blue",
-                yAxisID: "y-flow",
+                yAxisID: "y-pressure",
               },
               {
                 label: "Temperature (°C)",
@@ -276,15 +333,17 @@
                   display: true,
                   text: "Pressure (bar)",
                 },
+                min: 0,
+                max: 10,
               },
-              "y-flow": {
-                type: "linear",
-                position: "right",
-                title: {
-                  display: true,
-                  text: "Flow (mL/s)",
-                },
-              },
+              // "y-flow": {
+              //   type: "linear",
+              //   position: "right",
+              //   title: {
+              //     display: true,
+              //     text: "Flow (mL/s)",
+              //   },
+              // },
               "y-temperature": {
                 type: "linear",
                 position: "right",
