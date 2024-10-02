@@ -195,7 +195,7 @@ namespace eval ::plugins::${plugin_name} {
 		set path [dict get $state request path]
 		set profile [lindex [split $path "/"] 3]
 		#Load all saved profiles as a list
-		set savedprofiles [glob -tails -directory [pwd]/profiles/ *.tcl]
+		set savedprofiles [glob -tails -directory [pwd]/profiles/*.tcl]
 
 		if {$profile != ""} {
 			#Only return profile information if the profile exists
@@ -269,16 +269,27 @@ namespace eval ::plugins::${plugin_name} {
 		}
 		set path [dict get $state request path]
 		set shot [lindex [split $path "/"] 4]
-    append shotName [lindex [split $shot "."] 0] ".json"
 
-    if {$shotName != ""} {
-			set fd [open "[pwd]/history_v2/$shotName" r]
-			fconfigure $fd -translation binary
-			set content [read $fd]; close $fd
-			::wibble::return_200_json $content
-		} else {
-      ::wibble::return_200_json
-    }
+		if {$shot != ""} {
+			::wibble::return_200_json
+			return
+		}
+
+    array set loadedShots [::plugins::SDB::shots *]
+		set index [lsearch $loadedShots(filename) $shot]
+		if {$index == -1} {
+			::wibble::return_200_json
+			return
+		}
+
+		dict create shotDict
+		foreach {key value} [array get loadedShots] {
+			dict set shotDict $key [lindex $value $index]
+		}
+
+		set huddleShot ::shot::convert_legacy_to_v2 $shot $shotDict
+		::wibble::return_200_json [huddle jsondump $huddleShot]
+		
   }
 
   proc ::wibble::set_next_shot_in_dye { state } {
@@ -310,7 +321,6 @@ namespace eval ::plugins::${plugin_name} {
     if { ![check_auth $state] } {
 			return;
 		}
-    # TODO: check SDB plugin exists and is loaded
     array set loadedShots [::plugins::SDB::shots *]
     set jsonArray {}
     set listLength [llength $loadedShots(grinder_setting)]
