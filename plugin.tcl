@@ -10,7 +10,7 @@ namespace eval ::plugins::${plugin_name} {
 
     variable author "Yannick Dietler"
     variable contact "ydt@ydt.ch"
-    variable version 1.2
+    variable version 2.0
     variable description "API to control the DE1's power state and getting additional Information"
     variable name "Advanced REST API"
 
@@ -65,6 +65,14 @@ namespace eval ::plugins::${plugin_name} {
 		dict set response status 400
 		dict set state response header content-type "" {application/json charset utf-8}
 		dict set response content "{status: \"bad request\"}"
+		sendresponse $response
+		return false;
+	}
+
+	proc ::wibble::not_found {state} {
+		dict set response status 404
+		dict set state response header content-type "" {application/json charset utf-8}
+		dict set response content "{status: \"not found\"}"
 		sendresponse $response
 		return false;
 	}
@@ -270,25 +278,21 @@ namespace eval ::plugins::${plugin_name} {
 		set path [dict get $state request path]
 		set shot [lindex [split $path "/"] 4]
 
-		if {$shot != ""} {
-			::wibble::return_200_json
+		if {$shot == ""} {
+			::wibble::bad_request $state
 			return
 		}
 
-    array set loadedShots [::plugins::SDB::shots *]
-		set index [lsearch $loadedShots(filename) $shot]
-		if {$index == -1} {
-			::wibble::return_200_json
+		append shotName $shot ".shot"
+		set huddleShot [::shot::convert_legacy_to_v2 "[pwd]/history/$shotName" {} {} 0]
+		if { $huddleShot eq "" } {
+			::wibble::not_found $state
 			return
 		}
-
-		dict create shotDict
-		foreach {key value} [array get loadedShots] {
-			dict set shotDict $key [lindex $value $index]
-		}
-
-		set huddleShot ::shot::convert_legacy_to_v2 $shot $shotDict
-		::wibble::return_200_json [huddle jsondump $huddleShot]
+		set fd [open $huddleShot r]
+		fconfigure $fd -translation binary
+		set content [read $fd]; close $fd
+		::wibble::return_200_json $content
 		
   }
 
